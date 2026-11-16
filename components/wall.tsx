@@ -312,12 +312,12 @@ export function Wall() {
   return (
     <div className="flex min-h-svh flex-col">
       <header className="bg-primary text-primary-foreground shadow-sm">
-        <div className="mx-auto flex h-12 max-w-4xl items-center px-4">
+        <div className="mx-auto flex h-12 max-w-7xl items-center px-4">
           <span className="text-xl font-bold tracking-tight">wall</span>
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-4xl flex-1 content-start gap-6 px-4 py-6 md:grid-cols-[14rem_1fr]">
+      <main className="mx-auto grid w-full max-w-7xl flex-1 content-start gap-6 px-4 py-6 md:grid-cols-[14rem_1fr]">
         {/* Left: profile photo, name and information */}
         <aside>
           <div className="flex items-start gap-4 md:block">
