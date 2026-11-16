@@ -311,7 +311,8 @@ export function Wall() {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="bg-primary text-primary-foreground shadow-sm">
+      {/* sticky: the blue bar stays at the top of the screen while you scroll the feed */}
+      <header className="sticky top-0 z-20 bg-primary text-primary-foreground shadow-sm">
         <div className="mx-auto flex h-12 max-w-7xl items-center px-4">
           <span className="text-xl font-bold tracking-tight">wall</span>
         </div>
@@ -319,7 +320,10 @@ export function Wall() {
 
       <main className="mx-auto grid w-full max-w-7xl flex-1 content-start gap-6 px-4 py-6 md:grid-cols-[14rem_1fr]">
         {/* Left: profile photo, name and information */}
-        <aside>
+        {/* On wider screens the profile stays in view (just under the blue bar) while
+            the feed scrolls. "self-start" stops it stretching to the feed's full
+            height, which sticky needs. On phones it is simply part of the page. */}
+        <aside className="md:sticky md:top-16 md:max-h-[calc(100svh-5rem)] md:self-start md:overflow-y-auto">
           <div className="flex items-start gap-4 md:block">
             <Image
               src="/profile.jpg"
