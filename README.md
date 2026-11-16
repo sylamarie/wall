@@ -4,7 +4,7 @@ A small 2008-style Facebook wall. Type a message, press **Share**, and it appear
 
 Built with **React 19**, **Next.js**, **Supabase**, **Tailwind CSS** and **shadcn/ui**.
 
-**Live site:** _(added after deployment)_
+**Live site:** https://wall-syla.vercel.app
 
 ## What it does
 
