@@ -12,6 +12,7 @@ Built with **React 19**, **Next.js**, **Supabase**, **Tailwind CSS** and **shadc
 - Every message is saved to a `posts` table in Supabase.
 - The feed shows the newest 50 messages, newest first.
 - The feed updates live: if someone else posts, it appears on your screen without a refresh (Supabase Realtime).
+- Optionally add a photo (JPG, PNG, GIF or WebP, up to 5 MB). It is uploaded to Supabase Storage, with a preview before you share.
 - Times show as "now", "5m", "2h", "3d", and keep updating on their own.
 - No login is needed. Visitors can type a name in the "Posting as" box (it is remembered in their browser, and a blank name posts as "Guest"). The wall owner's profile is set in `lib/config.ts`.
 - After posting, the cursor returns to the message box, and there is a short 3-second pause before the next post to slow down accidental double-posts.
@@ -26,7 +27,7 @@ You need [Node.js](https://nodejs.org) 20 or newer and a free [Supabase](https:/
 npm install
 ```
 
-**2. Create the database.** In your Supabase project, open **SQL Editor**, click **New query**, paste the contents of [`supabase/schema.sql`](supabase/schema.sql) and press **Run**. It creates the `posts` table, the access rules, and turns on Realtime. It is safe to run twice.
+**2. Create the database.** In your Supabase project, open **SQL Editor**, click **New query**, paste the contents of [`supabase/schema.sql`](supabase/schema.sql) and press **Run**. It creates the `posts` table, the `wall-images` photo bucket, the access rules, and turns on Realtime. It is safe to run twice. (If you set up the database before photo upload existed, run the three small files in [`supabase/add-photos/`](supabase/add-photos) once each, in order, instead. They add just the photo parts and keep your posts.)
 
 **3. Add your keys.** Copy `.env.local.example` to `.env.local` and fill in two values from **Project Settings > API** in Supabase:
 
@@ -59,7 +60,8 @@ There is no login, so anyone can read and add posts. The database itself enforce
 
 - Anyone may **read** posts and **add** posts.
 - Nobody can **edit or delete** posts, because no rule allows it.
-- The database rejects empty messages, messages over 280 characters, and names over 60 characters, even if someone skips the website and talks to the database directly.
+- The database rejects empty posts (no text and no photo), messages over 280 characters, and names over 60 characters, even if someone skips the website and talks to the database directly.
+- **Photos:** anyone may upload one, but only a JPG, PNG, GIF or WebP file up to 5 MB, saved under a random name. Nobody can list, replace or delete photos, and a post can only point at a photo in this project's own bucket, never at another website. SVG files are refused because they can carry scripts.
 
 The `anon` key is meant to be public. It is safe in the browser because the rules above decide what it can do.
 

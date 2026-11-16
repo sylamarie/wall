@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { FEED_LIMIT, addPost, formatAgo, type Post } from "./posts";
+import {
+  FEED_LIMIT,
+  MAX_IMAGE_BYTES,
+  addPost,
+  checkImage,
+  formatAgo,
+  type Post,
+} from "./posts";
 
 // A fixed "now" so the tests never depend on the real clock.
 const NOW = Date.UTC(2026, 10, 16, 12, 0, 0);
@@ -9,6 +16,7 @@ const post = (id: string, createdAt: string): Post => ({
   id,
   author_name: "Test",
   content: id,
+  image_path: null,
   created_at: createdAt,
 });
 
@@ -41,6 +49,27 @@ describe("addPost", () => {
     const original = [post("a", minutesAgo(5))];
     addPost(original, post("b", minutesAgo(1)));
     expect(original).toHaveLength(1);
+  });
+});
+
+describe("checkImage", () => {
+  it("accepts JPG, PNG, GIF and WebP photos up to 5 MB", () => {
+    for (const type of ["image/jpeg", "image/png", "image/gif", "image/webp"]) {
+      expect(checkImage({ type, size: 1000 })).toBeNull();
+    }
+    expect(checkImage({ type: "image/png", size: MAX_IMAGE_BYTES })).toBeNull();
+  });
+
+  it("rejects a photo that is even one byte over 5 MB", () => {
+    expect(checkImage({ type: "image/png", size: MAX_IMAGE_BYTES + 1 })).toMatch(
+      /too big/,
+    );
+  });
+
+  it("rejects files that are not allowed photo types", () => {
+    for (const type of ["image/svg+xml", "text/html", "application/pdf", ""]) {
+      expect(checkImage({ type, size: 1000 })).toMatch(/JPG, PNG, GIF or WebP/);
+    }
   });
 });
 

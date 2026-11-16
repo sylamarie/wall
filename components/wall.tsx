@@ -3,9 +3,11 @@
 import Image from "next/image";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
+  type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -14,8 +16,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { OWNER } from "@/lib/config";
-import { FEED_LIMIT, MAX_LENGTH, addPost, formatAgo, type Post } from "@/lib/posts";
-import { supabase } from "@/lib/supabase";
+import {
+  FEED_LIMIT,
+  IMAGE_BUCKET,
+  IMAGE_EXTENSIONS,
+  MAX_LENGTH,
+  addPost,
+  checkImage,
+  formatAgo,
+  type Post,
+} from "@/lib/posts";
+import { publicImageUrl, supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 type Status = "loading" | "ready" | "error" | "unconfigured";
@@ -96,6 +107,24 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
+// A photo inside a post. A plain <img> keeps this simple: the photos come from
+// Supabase Storage, and Next.js's image optimiser would need extra setup for
+// that address. "lazy" means photos far down the page load only when scrolled to.
+function PostPhoto({ path, author }: { path: string; author: string }) {
+  const src = publicImageUrl(path);
+  if (!src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={`Photo shared by ${author}`}
+      loading="lazy"
+      decoding="async"
+      className="mt-2 max-h-96 w-auto max-w-full rounded-md border"
+    />
+  );
+}
+
 export function Wall() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [status, setStatus] = useState<Status>(
@@ -106,9 +135,22 @@ export function Wall() {
   const [shareError, setShareError] = useState<string | null>(null);
   const [cooling, setCooling] = useState(false); // short pause after each post
   const [name, setName] = useStoredName();
+  const [photo, setPhoto] = useState<File | null>(null); // the photo chosen to share
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const coolTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const now = useNow();
+
+  // A temporary address so we can show a preview of the chosen photo.
+  const previewUrl = useMemo(
+    () => (photo ? URL.createObjectURL(photo) : null),
+    [photo],
+  );
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl); // free the memory
+    };
+  }, [previewUrl]);
 
   // If the page goes away, stop the "pause after posting" timer.
   useEffect(() => {
@@ -116,6 +158,24 @@ export function Wall() {
       if (coolTimer.current) clearTimeout(coolTimer.current);
     };
   }, []);
+
+  function clearPhoto() {
+    setPhoto(null);
+    if (photoInputRef.current) photoInputRef.current.value = ""; // allow re-picking the same file
+  }
+
+  function onPhotoChosen(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const problem = checkImage(file);
+    if (problem) {
+      setShareError(problem);
+      clearPhoto();
+      return;
+    }
+    setShareError(null);
+    setPhoto(file);
+  }
 
   // On load: fetch the newest posts, then listen for new ones arriving live.
   useEffect(() => {
@@ -162,11 +222,12 @@ export function Wall() {
   async function share(event?: FormEvent) {
     event?.preventDefault();
     const content = text.trim();
+    // A post needs some text, a photo, or both.
     if (
       !supabase ||
       sending ||
       cooling ||
-      content.length === 0 ||
+      (content.length === 0 && !photo) ||
       content.length > MAX_LENGTH
     ) {
       return;
@@ -176,9 +237,42 @@ export function Wall() {
 
     setSending(true);
     setShareError(null);
+
+    // Step 1: if there is a photo, upload it first. It gets a random file name,
+    // so nobody can guess it and it can never overwrite someone else's photo.
+    let imagePath: string | undefined;
+    if (photo) {
+      const problem = checkImage(photo);
+      if (problem) {
+        setShareError(problem);
+        setSending(false);
+        return;
+      }
+      imagePath = `${crypto.randomUUID()}.${IMAGE_EXTENSIONS[photo.type]}`;
+      const { error: uploadError } = await supabase.storage
+        .from(IMAGE_BUCKET)
+        .upload(imagePath, photo, {
+          contentType: photo.type,
+          cacheControl: "31536000", // photos never change, so browsers may keep them
+          upsert: false,
+        });
+      if (uploadError) {
+        console.error("Could not upload photo:", uploadError.message);
+        setShareError("Sorry, your photo could not be uploaded. Please try again.");
+        setSending(false);
+        return;
+      }
+    }
+
+    // Step 2: save the post. "image_path" is only sent when there is a photo, so
+    // posts without photos keep working even on an older database.
     const { data, error } = await supabase
       .from("posts")
-      .insert({ author_name: author, content })
+      .insert({
+        author_name: author,
+        content,
+        ...(imagePath ? { image_path: imagePath } : {}),
+      })
       .select()
       .single();
 
@@ -188,6 +282,7 @@ export function Wall() {
     } else {
       setPosts((current) => addPost(current, data as Post));
       setText("");
+      clearPhoto();
       textareaRef.current?.focus(); // ready to type the next one
 
       // A short pause (3 seconds) before the next post. It slows down
@@ -209,7 +304,10 @@ export function Wall() {
 
   const remaining = MAX_LENGTH - text.length;
   const canShare =
-    text.trim().length > 0 && !sending && !cooling && status !== "unconfigured";
+    (text.trim().length > 0 || photo !== null) &&
+    !sending &&
+    !cooling &&
+    status !== "unconfigured";
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -303,6 +401,50 @@ export function Wall() {
               // Light-blue tint fading to white with a dashed border, like the mockup.
               className="resize-none border-dashed border-primary/40 bg-linear-to-r from-primary/10 to-card"
             />
+
+            {/* Optional photo: pick one, see a preview, and remove it if you change your mind. */}
+            <div className="mt-2">
+              <input
+                id="photo"
+                ref={photoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={onPhotoChosen}
+                className="peer sr-only"
+              />
+              {photo && previewUrl ? (
+                <div className="relative inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- just a local preview */}
+                  <img
+                    src={previewUrl}
+                    alt="Preview of the photo you chose"
+                    className="max-h-40 w-auto rounded-md border"
+                  />
+                  <button
+                    type="button"
+                    onClick={clearPhoto}
+                    aria-label="Remove photo"
+                    className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full bg-foreground text-sm leading-none text-background shadow"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <label
+                  htmlFor="photo"
+                  className="flex cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-primary/40 bg-card/60 px-3 py-3 text-center text-sm hover:bg-card peer-focus-visible:ring-2 peer-focus-visible:ring-ring"
+                >
+                  <span className="font-medium">
+                    Click to add photo{" "}
+                    <span className="font-normal text-muted-foreground">(optional)</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    JPG, PNG, GIF or WebP, up to 5 MB
+                  </span>
+                </label>
+              )}
+            </div>
+
             <div className="mt-1.5 flex items-start justify-between gap-3">
               <p
                 className={cn(
@@ -357,9 +499,14 @@ export function Wall() {
                       {formatAgo(post.created_at, now)}
                     </time>
                   </div>
-                  <p className="mt-0.5 break-words whitespace-pre-wrap">
-                    {post.content}
-                  </p>
+                  {post.content && (
+                    <p className="mt-0.5 break-words whitespace-pre-wrap">
+                      {post.content}
+                    </p>
+                  )}
+                  {post.image_path && (
+                    <PostPhoto path={post.image_path} author={post.author_name} />
+                  )}
                 </div>
               </li>
             ))}

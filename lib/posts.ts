@@ -5,11 +5,36 @@ export type Post = {
   id: string;
   author_name: string;
   content: string;
+  image_path: string | null; // the photo's file name in storage, or null if none
   created_at: string; // a timestamp such as "2026-11-16T07:05:12.123+00:00"
 };
 
 export const MAX_LENGTH = 280; // longest message allowed
 export const FEED_LIMIT = 50; // how many posts the feed shows
+
+// Photos. They live in a Supabase Storage "bucket" with this name.
+export const IMAGE_BUCKET = "wall-images";
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+// Only these file types are allowed (no SVG: those can carry scripts).
+// The value is the file ending we save the photo with.
+export const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+
+// Returns a friendly error message if the file isn't allowed, or null if it is.
+// (The storage bucket enforces the same rules again on the server.)
+export function checkImage(file: { type: string; size: number }): string | null {
+  if (!(file.type in IMAGE_EXTENSIONS)) {
+    return "Please choose a JPG, PNG, GIF or WebP image.";
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return "That photo is too big. Please choose one under 5 MB.";
+  }
+  return null;
+}
 
 // Adds a post to the feed and keeps the newest first.
 // If the post is already in the list we ignore it. That happens because a post

@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { IMAGE_BUCKET } from "./posts";
+
 // These two values come from the .env.local file (and from Vercel's
 // "Environment Variables" once the site is live). Both are meant to be public:
 // the "anon / publishable" key is safe in the browser because the database's
@@ -16,3 +18,9 @@ const key =
 // instead of crashing.
 export const supabase: SupabaseClient | null =
   url && key ? createClient(url, key) : null;
+
+// The public web address of a photo, given its file name in storage.
+export function publicImageUrl(path: string): string | null {
+  if (!supabase) return null;
+  return supabase.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+}
