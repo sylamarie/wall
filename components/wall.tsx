@@ -71,6 +71,31 @@ function useStoredName() {
   return [name, writeName] as const;
 }
 
+// A round avatar with the writer's initials, like the small profile pictures on
+// the 2008 wall. The colour comes from the name, so the same person always gets
+// the same colour.
+function Avatar({ name }: { name: string }) {
+  const firstLetter = (word: string) => Array.from(word)[0] ?? "";
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials = (
+    firstLetter(words[0] ?? "?") +
+    (words.length > 1 ? firstLetter(words[words.length - 1]) : "")
+  ).toUpperCase();
+
+  let hue = 0;
+  for (const ch of name) hue = (hue * 31 + (ch.codePointAt(0) ?? 0)) % 360;
+
+  return (
+    <span
+      aria-hidden
+      className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white select-none"
+      style={{ background: `oklch(0.55 0.13 ${hue})` }}
+    >
+      {initials}
+    </span>
+  );
+}
+
 export function Wall() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [status, setStatus] = useState<Status>(
@@ -275,7 +300,8 @@ export function Wall() {
               maxLength={MAX_LENGTH}
               rows={3}
               placeholder="What's on your mind?"
-              className="resize-none bg-card"
+              // Light-blue tint fading to white with a dashed border, like the mockup.
+              className="resize-none border-dashed border-primary/40 bg-linear-to-r from-primary/10 to-card"
             />
             <div className="mt-1.5 flex items-start justify-between gap-3">
               <p
@@ -317,20 +343,24 @@ export function Wall() {
 
           <ul className="mt-6 divide-y" aria-live="polite">
             {posts.map((post) => (
-              <li key={post.id} className="py-3">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-semibold">{post.author_name}</span>
-                  <time
-                    dateTime={post.created_at}
-                    title={new Date(post.created_at).toLocaleString()}
-                    className="shrink-0 text-xs text-muted-foreground"
-                  >
-                    {formatAgo(post.created_at, now)}
-                  </time>
+              // "post-in" fades each post in (see globals.css).
+              <li key={post.id} className="post-in flex gap-3 py-3">
+                <Avatar name={post.author_name} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold">{post.author_name}</span>
+                    <time
+                      dateTime={post.created_at}
+                      title={new Date(post.created_at).toLocaleString()}
+                      className="shrink-0 text-xs text-muted-foreground"
+                    >
+                      {formatAgo(post.created_at, now)}
+                    </time>
+                  </div>
+                  <p className="mt-0.5 break-words whitespace-pre-wrap">
+                    {post.content}
+                  </p>
                 </div>
-                <p className="mt-0.5 break-words whitespace-pre-wrap">
-                  {post.content}
-                </p>
               </li>
             ))}
           </ul>

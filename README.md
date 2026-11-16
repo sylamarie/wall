@@ -45,7 +45,13 @@ npm run dev
 
 Then open the address it prints (usually http://localhost:3000).
 
-Other commands: `npm run build` makes the production version, and `npm run lint` checks the code.
+Other commands:
+
+```bash
+npm run build   # make the production version
+npm run lint    # check the code for problems
+npm test        # run the automated tests (feed order, "5m / 2h" labels)
+```
 
 ## How the data is protected
 
